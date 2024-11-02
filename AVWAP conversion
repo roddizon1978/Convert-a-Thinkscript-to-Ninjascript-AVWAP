@@ -1,0 +1,58 @@
+csharp
+Copy code
+#region Using declarations
+using System;
+using NinjaTrader.Cbi;
+using NinjaTrader.Gui.Tools;
+using NinjaTrader.NinjaScript.StrategyAnalyzer;
+using NinjaTrader.Data;
+#endregion
+
+namespace NinjaTrader.NinjaScript.Strategies
+{
+    public class AnchoredVWAPStops : Strategy
+    {
+        private int n = 20;
+        private double ticks = 2.0;
+
+        protected override void OnBarUpdate()
+        {
+            if (CurrentBar < n) return; // Ensure enough bars
+
+            // High Pivot calculation
+            bool isHigher = true;
+            for (int i = 1; i <= n; i++)
+                isHigher &= High[0] > High[i];
+            double HH = (isHigher && High[0] == MAX(High, n)[0]) ? High[0] : double.NaN;
+
+            // Low Pivot calculation
+            bool isLower = true;
+            for (int i = 1; i <= n; i++)
+                isLower &= Low[0] < Low[i];
+            double LL = (isLower && Low[0] == MIN(Low, n)[0]) ? Low[0] : double.NaN;
+
+            // Calculate Direction
+            int dir = (double.IsNaN(LL) ? (double.IsNaN(HH) ? 0 : -1) : 1);
+
+            // Arrow Plotting Logic
+            if (dir == 1 && CrossAbove(dir, 0, 1))
+                Draw.ArrowUp(this, "ArrowUp" + CurrentBar, false, 0, Low[0] - (TickSize * 2), Brushes.White);
+            else if (dir == -1 && CrossBelow(dir, 0, 1))
+                Draw.ArrowDown(this, "ArrowDown" + CurrentBar, false, 0, High[0] + (TickSize * 2), Brushes.Orange);
+
+            // Volume Weighted Anchored Highs and Lows
+            double LocH = (High[0] + (TickSize * ticks)) * Volume[0];
+            double LocL = (Low[0] - (TickSize * ticks)) * Volume[0];
+
+            // Accumulate VWAP values based on direction
+            double PH = dir == -1 ? LocH : (PH + LocH);
+            double VH = dir == -1 ? Volume[0] : (VH + Volume[0]);
+            double PL = dir == 1 ? LocL : (PL + LocL);
+            double VL = dir == 1 ? Volume[0] : (VL + Volume[0]);
+
+            // Plot VWAP lines
+            PlotBrushes[0][0] = PH / VH;
+            PlotBrushes[1][0] = PL / VL;
+        }
+    }
+}
